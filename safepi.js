@@ -9,9 +9,14 @@
  * @version 1.1.0
  */
 
-const https = require("https");
-const fs = require("fs");
-const path = require("path");
+import https from "https";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * ANSI color codes for pretty terminal output
@@ -696,6 +701,20 @@ process.on("unhandledRejection", (reason, promise) => {
   process.exit(1);
 });
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
+
+export {
+  printUsage,
+  makeRequest,
+  getGradeColor,
+  formatTextOutput,
+  formatPrettyOutput,
+  formatHtmlOutput,
+  generateTimestamp,
+  parseArgs,
+  scanSingleDomain,
+  main,
+  colors,
+};
