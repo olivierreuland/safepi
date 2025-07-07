@@ -4,7 +4,6 @@ on:
   # Trigger on pull requests to main branch
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:
   
   # Allow manual trigger
   workflow_dispatch:
