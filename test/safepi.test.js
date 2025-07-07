@@ -467,6 +467,15 @@ describe('SafePI CLI Tool', () => {
       expect([0, 1]).toContain(result.exitCode)
       expect(result.stdout).toContain('Scanning 192.0.2.1')
     })
+
+    it('should exit with code 1 on network/API errors even with --fail false', async () => {
+      // Test with an invalid domain that will cause a network/API error
+      const result = await runSafePI('-d invalid-domain-that-does-not-exist.invalid --fail false')
+      
+      // Network/API errors should always cause exit code 1, even with --fail false
+      expect(result.exitCode).toBe(1)
+      expect(result.stdout).toContain('Scanning invalid-domain-that-does-not-exist.invalid')
+    })
   })
 
   describe('Parameter Edge Cases', () => {

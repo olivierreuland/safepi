@@ -6,7 +6,7 @@
  *
  * @author Olivier Reuland
  * @license MIT
- * @version 1.1.0
+ * @version 1.3.1
  */
 
 import https from "https";
@@ -768,13 +768,16 @@ async function main() {
 
   const results = [];
   let hasFailures = false;
+  let hasErrors = false;
 
   // Process each domain
   for (const domain of domains) {
     const result = await scanSingleDomain(domain, options);
     results.push(result);
 
-    if (!result.success || (result.success && !result.passed)) {
+    if (!result.success) {
+      hasErrors = true;
+    } else if (result.success && !result.passed) {
       hasFailures = true;
     }
 
@@ -819,8 +822,8 @@ async function main() {
     console.log(`  Total: ${domains.length}`);
   }
 
-  // Exit with non-zero code only if --fail is true and there are failures
-  if (shouldFailOnError && hasFailures) {
+  // Exit with non-zero code if there are network/API errors, or if --fail is true and there are test failures
+  if (hasErrors || (shouldFailOnError && hasFailures)) {
     process.exit(1);
   }
 }

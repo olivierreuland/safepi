@@ -3,7 +3,7 @@
 A modern, comprehensive command-line tool for scanning websites using the Mozilla Observatory API to assess their security posture and HTTP security headers.
 
 **Author:** Olivier Reuland  
-**Version:** 1.3.0
+**Version:** 1.3.1
 
 ## ✨ Features
 
@@ -182,8 +182,8 @@ Results:
 
 ## ⚡ Exit Codes
 
-- `0`: All scans passed the minimum score requirement (or --fail is disabled)
-- `1`: One or more scans failed or encountered errors (only when --fail is enabled)
+- `0`: All scans passed the minimum score requirement and no network/API errors occurred
+- `1`: Network/API errors occurred, or test failures occurred when --fail is enabled
 
 ### Exit Code Behavior
 
@@ -191,7 +191,7 @@ Results:
 | ----------------- | ------------ | ----------- | ----------------- |
 | All tests pass    | Exit 0       | Exit 0      | Exit 0            |
 | Some tests fail   | Exit 0       | Exit 1      | Exit 1            |
-| Network/API error | Exit 0       | Exit 1      | Exit 1            |
+| Network/API error | Exit 1       | Exit 1      | Exit 1            |
 
 This makes SafePI perfect for CI/CD pipelines where you want builds to fail on security issues.
 
@@ -269,7 +269,11 @@ This tool uses the [Mozilla Observatory API](https://observatory.mozilla.org/), 
 
 ## 📝 Changelog
 
-### v1.3.0 🔒 **Latest Release - Security Enhanced**
+### v1.3.1 🔧 **Latest Release - Exit Code Fix**
+
+- 🐛 **Fixed Exit Code Behavior**: Network/API errors now always cause exit code 1, even with `--fail false`
+
+### v1.3.0 🔒 **Security Enhanced**
 
 - 🛡️ **Enhanced XSS Protection**: Added HTML output sanitization to prevent XSS attacks in reports
 - 🔐 **Improved Path Traversal Prevention**: Enhanced directory traversal protection with multiple encoding detection
