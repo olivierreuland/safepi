@@ -35,6 +35,21 @@ const colors = {
 };
 
 /**
+ * Escapes HTML special characters to prevent XSS attacks
+ * @param {string} text - Text to escape
+ * @returns {string} HTML-escaped text
+ */
+function escapeHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * Prints the command usage instructions for SafePI.
  */
 function printUsage() {
@@ -72,6 +87,13 @@ Examples:
 function makeRequest(url, method = "GET", data = null) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
+
+    // Validate that we're only making requests to the expected API
+    if (parsedUrl.hostname !== "observatory-api.mdn.mozilla.net") {
+      reject(new Error("Invalid API endpoint"));
+      return;
+    }
+
     const options = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || 443,
@@ -80,7 +102,10 @@ function makeRequest(url, method = "GET", data = null) {
       headers: {
         "User-Agent": "SafePI/1.0",
         "Content-Type": "application/json",
+        Accept: "application/json",
       },
+      timeout: 30000, // 30 second timeout
+      rejectUnauthorized: true, // Enforce SSL certificate validation
     };
 
     if (data) {
@@ -89,9 +114,19 @@ function makeRequest(url, method = "GET", data = null) {
 
     const req = https.request(options, (res) => {
       let body = "";
+      let totalSize = 0;
+      const MAX_RESPONSE_SIZE = 1024 * 1024; // 1MB limit
+
       res.on("data", (chunk) => {
+        totalSize += chunk.length;
+        if (totalSize > MAX_RESPONSE_SIZE) {
+          req.destroy();
+          reject(new Error("Response too large"));
+          return;
+        }
         body += chunk;
       });
+
       res.on("end", () => {
         try {
           const jsonData = JSON.parse(body);
@@ -104,6 +139,11 @@ function makeRequest(url, method = "GET", data = null) {
 
     req.on("error", (error) => {
       reject(error);
+    });
+
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timeout"));
     });
 
     if (data) {
@@ -218,7 +258,9 @@ function formatHtmlOutput(result, passingScore) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Scan Report - ${result.host || "Unknown"}</title>
+    <title>Security Scan Report - ${escapeHtml(
+      result.host || "Unknown"
+    )}</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -301,7 +343,7 @@ function formatHtmlOutput(result, passingScore) {
     <div class="container">
         <div class="header">
             <h1>Security Scan Report</h1>
-            <h2>${result.host || "Unknown Domain"}</h2>
+            <h2>${escapeHtml(result.host || "Unknown Domain")}</h2>
         </div>
         
         <div style="text-align: center; margin-bottom: 30px;">
@@ -345,10 +387,12 @@ function formatHtmlOutput(result, passingScore) {
         </div>
         
         ${
-          result.details_url
+          result.details_url && isValidUrl(result.details_url)
             ? `
         <div style="text-align: center;">
-            <a href="${result.details_url}" class="details-link" target="_blank">
+            <a href="${escapeHtml(
+              result.details_url
+            )}" class="details-link" target="_blank" rel="noopener noreferrer">
                 View Detailed Report
             </a>
         </div>
@@ -527,6 +571,16 @@ async function scanSingleDomain(hostDomain, options) {
     rescan,
   } = options;
 
+  // Validate domain first
+  if (!isValidDomain(hostDomain)) {
+    console.error(`Invalid domain: ${hostDomain}`);
+    return {
+      domain: hostDomain,
+      success: false,
+      error: "Invalid domain format",
+    };
+  }
+
   try {
     console.log(`Scanning ${hostDomain}...`);
 
@@ -576,12 +630,33 @@ async function scanSingleDomain(hostDomain, options) {
       case "html": {
         output = formatHtmlOutput(result, passingScore);
 
-        // Sanitize reportPath to prevent path traversal and absolute paths
+        // Enhanced path traversal protection
         const isPathTraversal = (inputPath) => {
           // Disallow absolute paths and any '..' segments
           if (path.isAbsolute(inputPath)) return true;
-          const normalized = path.normalize(inputPath);
-          return normalized.split(path.sep).includes("..");
+
+          // Decode any URL-encoded characters
+          const decoded = decodeURIComponent(inputPath);
+
+          // Normalize path and check for traversal patterns
+          const normalized = path.normalize(decoded);
+
+          // Check for various traversal patterns
+          const dangerousPatterns = [
+            "..",
+            "/./",
+            "\\",
+            "%2e%2e",
+            "%2E%2E",
+            "..%2f",
+            "..%2F",
+            "%2e%2e%2f",
+            "%2E%2E%2F",
+          ];
+
+          return dangerousPatterns.some((pattern) =>
+            normalized.toLowerCase().includes(pattern.toLowerCase())
+          );
         };
 
         if (isPathTraversal(reportPath)) {
@@ -624,6 +699,64 @@ async function scanSingleDomain(hostDomain, options) {
 }
 
 /**
+ * Validates if a string is a valid URL
+ * @param {string} url - URL to validate
+ * @returns {boolean} True if valid URL, false otherwise
+ */
+function isValidUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates if a string is a valid domain name
+ * @param {string} domain - Domain to validate
+ * @returns {boolean} True if valid domain, false otherwise
+ */
+function isValidDomain(domain) {
+  if (!domain || typeof domain !== "string") return false;
+
+  // Basic domain validation regex
+  const domainRegex =
+    /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+  // Check length constraints
+  if (domain.length > 253) return false;
+
+  // Check for valid characters and format
+  if (!domainRegex.test(domain)) return false;
+
+  // Check for dangerous patterns
+  const dangerousPatterns = [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "file://",
+    "javascript:",
+    "data:",
+    "ftp://",
+    "ftps://",
+  ];
+
+  return !dangerousPatterns.some((pattern) =>
+    domain.toLowerCase().includes(pattern.toLowerCase())
+  );
+}
+
+/**
+ * Rate limiter to prevent overwhelming the API
+ * @param {number} delay - Delay in milliseconds
+ * @returns {Promise} Promise that resolves after delay
+ */
+function rateLimit(delay = 1000) {
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+/**
  * Main function that orchestrates the security scanning process.
  * Parses command line arguments, scans all specified domains, formats output,
  * and handles exit codes based on results and options.
@@ -648,6 +781,8 @@ async function main() {
     // Add separator between domains if scanning multiple
     if (domains.length > 1 && domain !== domains[domains.length - 1]) {
       console.log("\n" + "=".repeat(50) + "\n");
+      // Rate limit between requests to be respectful to the API
+      await rateLimit(2000); // 2 second delay between requests
     }
   }
 
@@ -717,4 +852,8 @@ export {
   scanSingleDomain,
   main,
   colors,
+  escapeHtml,
+  isValidUrl,
+  isValidDomain,
+  rateLimit,
 };
