@@ -3,40 +3,40 @@ name: Security Scan with SafePI
 on:
   # Trigger on pull requests to main branch
   pull_request:
-    branches: [ main, master ]
-  
+    branches: [main, master]
+
   # Allow manual trigger
   workflow_dispatch:
     inputs:
       domains:
-        description: 'Domains to scan (comma-separated)'
+        description: "Domains to scan (comma-separated)"
         required: true
-        default: 'google.com,github.com,stackoverflow.com'
+        default: "google.com,github.com,stackoverflow.com"
       score:
-        description: 'Minimum score required'
+        description: "Minimum score required"
         required: false
-        default: '90'
+        default: "90"
       report:
-        description: 'Report format'
+        description: "Report format"
         required: false
-        default: 'html'
+        default: "html"
         type: choice
         options:
           - html
           - pretty
           - text
       output:
-        description: 'Output path for reports'
+        description: "Output path for reports"
         required: false
-        default: 'reports/'
+        default: "reports/"
       hidden:
-        description: 'Hide scan from public results'
+        description: "Hide scan from public results"
         required: false
-        default: 'true'
+        default: "true"
         type: choice
         options:
-          - 'true'
-          - 'false'
+          - "true"
+          - "false"
       rescan:
         description: "Force rescan of site"
         required: false
@@ -48,26 +48,26 @@ on:
       fail:
         description: "Fail the workflow if the scan fails"
         required: false
-        default: 'true'
+        default: "false"
         type: choice
         options:
-          - 'true'
-          - 'false'
+          - "true"
+          - "false"
 
 jobs:
   security-scan:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-    
-    - name: Run SafePI Security Scan
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Run SafePI Security Scan
         env:
           DOMAINS: ${{ github.event.inputs.domains || 'google.com,github.com,stackoverflow.com' }}
           SCORE: ${{ github.event.inputs.score || '80' }}
@@ -76,7 +76,7 @@ jobs:
           HIDDEN: ${{ github.event.inputs.hidden || 'true' }}
           RESCAN: ${{ github.event.inputs.rescan || 'true' }}
           FAIL: ${{ github.event.inputs.fail || 'false' }}
-      run: |
+        run: |
           node safepi.js \
           --domain "$DOMAINS" \
           --score "$SCORE" \
@@ -85,10 +85,10 @@ jobs:
           --hidden "$HIDDEN" \
           --rescan "$RESCAN" \
           --fail "$FAIL"
-    - name: Upload HTML Reports
-      uses: actions/upload-artifact@v4
-      if: always() && (github.event.inputs.report == 'html' || github.event_name == 'pull_request')
-      with:
-        name: security-reports-${{ github.run_number }}
-        path: ${{ github.event.inputs.output || 'reports/' }}*.html
-        retention-days: 30
+      - name: Upload HTML Reports
+        uses: actions/upload-artifact@v4
+        if: always() && (github.event.inputs.report || 'html') == 'html'
+        with:
+          name: security-reports-${{ github.run_number }}
+          path: ${{ github.event.inputs.output || 'reports/' }}*.html
+          retention-days: 30
