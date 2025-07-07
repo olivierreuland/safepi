@@ -38,7 +38,15 @@ on:
           - 'true'
           - 'false'
       rescan:
-        description: 'Force rescan of site'
+        description: "Force rescan of site"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      fail:
+        description: "Fail the workflow if the scan fails"
         required: false
         default: 'true'
         type: choice
@@ -60,19 +68,23 @@ jobs:
         node-version: '18'
     
     - name: Run SafePI Security Scan
+        env:
+          DOMAINS: ${{ github.event.inputs.domains || 'google.com,github.com,stackoverflow.com' }}
+          SCORE: ${{ github.event.inputs.score || '80' }}
+          REPORT: ${{ github.event.inputs.report || 'html' }}
+          OUTPUT: ${{ github.event.inputs.output || 'reports/' }}
+          HIDDEN: ${{ github.event.inputs.hidden || 'true' }}
+          RESCAN: ${{ github.event.inputs.rescan || 'true' }}
+          FAIL: ${{ github.event.inputs.fail || 'false' }}
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           node safepi.js \
-            -d "${{ github.event.inputs.domains }}" \
-            -s ${{ github.event.inputs.score }} \
-            -r ${{ github.event.inputs.report }} \
-            -o ${{ github.event.inputs.output }} \
-            --hidden ${{ github.event.inputs.hidden }} \
-            --rescan ${{ github.event.inputs.rescan }}
-        else
-          node safepi.js -d google.com,github.com,stackoverflow.com -s 90 -r html -o reports/
-        fi
-    
+          --domain "$DOMAINS" \
+          --score "$SCORE" \
+          --report "$REPORT" \
+          --output "$OUTPUT" \
+          --hidden "$HIDDEN" \
+          --rescan "$RESCAN" \
+          --fail "$FAIL"
     - name: Upload HTML Reports
       uses: actions/upload-artifact@v4
       if: always() && (github.event.inputs.report == 'html' || github.event_name == 'pull_request')

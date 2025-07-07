@@ -35,6 +35,7 @@ Options:
   -s, --score <score>       Minimum score required (default: 100)
   -r, --report <format>     Output format: text, pretty, or html (default: pretty)
   -o, --output <path>       Path for HTML reports (default: ./)
+  -f, --fail [true|false]   Exit with code 1 on failure (default: false)
   --hidden <true|false>     Hide scan from public results (default: true)
   --rescan <true|false>     Force rescan of site (default: true)
   -h, --help                Show this help message
@@ -45,6 +46,7 @@ Examples:
   node safepi.js -d domain1.com,domain2.com,domain3.com
   node safepi.js -d jnctn.nz -r text --hidden false
   node safepi.js -d jnctn.nz -s 85 -r html -o reports/ --rescan false
+  node safepi.js -d jnctn.nz --fail
 `);
 }
 
@@ -304,8 +306,7 @@ function parseArgs() {
   const options = {
     domains: [],
     score: 100,
-    report: 'pretty',
-    output: './',
+    fail: false,
     hidden: true,
     rescan: true
   };
@@ -350,7 +351,21 @@ function parseArgs() {
         process.exit(1);
       }
       options.output = args[++i];
-    } else if (arg === '--hidden') {
+    } else if (arg === "-f" || arg === "--fail") {
+      if (i + 1 >= args.length || args[i + 1].startsWith("-")) {
+        options.fail = true;
+      } else {
+        const value = args[++i].toLowerCase();
+        if (value === "true") {
+          options.fail = true;
+        } else if (value === "false") {
+          options.fail = false;
+        } else {
+          console.error("Error: --fail must be either true or false");
+          process.exit(1);
+        }
+      }
+    } else if (arg === "--hidden") {
       if (i + 1 >= args.length) {
         console.error('Error: --hidden requires a value (true or false)');
         process.exit(1);
@@ -517,8 +532,8 @@ async function main() {
     console.log(`  Total: ${domains.length}`);
   }
   
-  // Exit with non-zero code if any domain failed or had errors
-  if (hasFailures) {
+  // Exit with non-zero code only if --fail is true and there are failures
+  if (shouldFailOnError && hasFailures) {
     process.exit(1);
   }
 }
